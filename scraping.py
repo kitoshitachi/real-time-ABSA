@@ -1,11 +1,11 @@
-import json,re
+import json
 from requests_html import HTMLSession
 import pandas as pd
 from bs4 import BeautifulSoup
 
 session = HTMLSession()
 
-def get_hotels(offset):
+def get_hotels(offset:int):
     url = "https://www.tripadvisor.com.vn/Hotels-g293921-Vietnam-Hotels.html"
 
     schema_json = f"offset={offset}"
@@ -26,7 +26,7 @@ def get_hotels(offset):
     df = pd.json_normalize(contents_json['hotels'])[['id','name','numReviews']]
     return df.drop_duplicates().dropna()[df['numReviews'] != 0]
 
-def get_reviews(location_id):
+def get_reviews(location_id:int):
     schema_json = [{
         "query": "ea9aad8c98a6b21ee6d510fb765a6522", 
         "variables": {
@@ -70,26 +70,28 @@ def get_reviews(location_id):
     except KeyError:
         print(f'id {location_id} error')
 
+
+def run(offset:int, header:bool = True, mode:str = 'w'):
+    hotels = get_hotels(offset)
+    hotels.to_csv('hotels.csv',encoding='utf-8', index=False, mode=mode, header=header)
+    for id in hotels['id']:
+        df = get_reviews(id)
+        if df is not None:
+            df.to_csv('hotel_reviews.csv',encoding='utf-8', index=False, mode=mode, header=header)
+    
+    if len(hotels) < 30:
+        return False
+    
+    return True
+
+
 if __name__ == "__main__":
 
-    hotels = get_hotels(0)
-    hotels.to_csv('hotels.csv',encoding='utf-8', index=False)
-    for id in hotels['id']:
-        get_reviews(id).to_csv('hotel_reviews.csv',encoding='utf-8', index=False)
+    run(0)
 
     offset = 30
     try:
-        while True:
-            hotels = get_hotels(offset)
-            hotels.to_csv('hotels.csv',mode='a',encoding='utf-8', header=False, index=False)
-            for id in hotels['id']:
-                df = get_reviews(id)
-                if df is not None:
-                    df.to_csv('hotel_reviews.csv',mode='a',encoding='utf-8',header=False, index=False)
-
-            if len(hotels) < 30:
-                break
-
+        while run(offset,header=False,mode='a'):
             offset += 30
     except KeyboardInterrupt:
         print("end!")
