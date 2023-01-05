@@ -1,10 +1,32 @@
 import json,re
 from requests_html import HTMLSession
 import pandas as pd
+from bs4 import BeautifulSoup
+
 session = HTMLSession()
 
-def get_content(url):
-    location_id = re.findall(r'-d\d*-',url)[0].replace('-','').replace('d','')
+def get_hotels(offset):
+    url = "https://www.tripadvisor.com.vn/Hotels-g293921-Vietnam-Hotels.html"
+
+    schema_json = f"offset={offset}"
+    #
+    headers = {
+        "accept": "text/html, */*",
+        "accept-language": "vi",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "x-requested-with": "XMLHttpRequest"
+    }
+
+    r = session.post(url, headers=headers, data=schema_json)
+
+    soup = BeautifulSoup(r.text,'lxml')
+    result = soup.select_one('div[data-hotels-data]')['data-hotels-data']
+
+    contents_json = json.loads(result)
+    df = pd.json_normalize(contents_json['hotels'])[['id','name','numReviews']]
+    return df.drop_duplicates().dropna()[df['numReviews'] != 0]
+
+def get_reviews(location_id):
     schema_json = [{
         "query": "ea9aad8c98a6b21ee6d510fb765a6522", 
         "variables": {
@@ -34,17 +56,40 @@ def get_content(url):
     r = session.post("https://www.tripadvisor.com.vn/data/graphql/ids", headers=headers, json=schema_json)
     
     content_json = json.loads(r.text)[0]['data']['locations'][0]['reviewListPage']['reviews']
+    try:
     #, 'userProfile',['text','rating','title',['userId','username']]) \
-    df = pd.json_normalize(content_json)[[
-        'id','text',
-        'createdDate',
-        'userProfile.userId','userProfile.username'
-    ]]
-    df.columns = ['id','text','createdDate','userId','username']
-    df['text'] = df['text'].apply(lambda x : x.splitlines())
-    df = df.explode('text')
-    return df.dropna().drop_duplicates()
+        df = pd.json_normalize(content_json)[[
+            'id','text',
+            'createdDate',
+            'userProfile.userId','userProfile.username'
+        ]]
+        df.columns = ['id','text','createdDate','userId','username']
+        df['text'] = df['text'].apply(lambda x : x.splitlines())
+        df = df.explode('text')
+        return df.dropna().drop_duplicates()
+    except KeyError:
+        print(f'id {location_id} error')
 
 if __name__ == "__main__":
-    url = "https://www.tripadvisor.com.vn/Hotel_Review-g298085-d16891462-"
-    print(get_content(url).info())
+
+    hotels = get_hotels(0)
+    hotels.to_csv('hotels.csv',encoding='utf-8', index=False)
+    for id in hotels['id']:
+        get_reviews(id).to_csv('hotel_reviews.csv',encoding='utf-8', index=False)
+
+    offset = 30
+    try:
+        while True:
+            hotels = get_hotels(offset)
+            hotels.to_csv('hotels.csv',mode='a',encoding='utf-8', header=False, index=False)
+            for id in hotels['id']:
+                df = get_reviews(id)
+                if df is not None:
+                    df.to_csv('hotel_reviews.csv',mode='a',encoding='utf-8',header=False, index=False)
+
+            if len(hotels) < 30:
+                break
+
+            offset += 30
+    except KeyboardInterrupt:
+        print("end!")
