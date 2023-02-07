@@ -4,3 +4,4 @@ scraping.py
 Sentence-level-Restaurant
 checkpoints_dir-20230206T120442Z-001.zip
 word2vec_vi_words_100dims.txt
+city.csv
