@@ -81,10 +81,11 @@ def get_restaurants(city_id: int, offset: int):
     soup = BeautifulSoup(r.text, 'lxml')
     result = soup.select_one('#component_2')['data-component-props']
 
-    ids = json.loads(result)['locationIds'].split(',')
-    items = soup.select('div[data-test*=list_item]')
+    items = [item for item in soup.select('div[data-test*=list_item]') if item.attrs["data-test"] == "SL_list_item"]
     names = [re.sub('\d+\.\s+', '', item.select("a")[1].text, 1) for item in items]
+    ids = [re.search('-d(\d+)', item.select("a")[1].attrs["href"])[1] for item in items]
     df = pd.DataFrame({"Id": ids, "Name": names})
+    return df
 
 
 def run(offset: int, header: bool = True, mode: str = 'w'):
@@ -102,11 +103,12 @@ def run(offset: int, header: bool = True, mode: str = 'w'):
 
 
 if __name__ == "__main__":
-    run(0)
+    get_restaurants(293925, 0)
+    # run(0)
 
-    offset = 30
-    try:
-        while run(offset, header=False, mode='a'):
-            offset += 30
-    except KeyboardInterrupt:
-        print("end!")
+    # offset = 30
+    # try:
+    #     while run(offset, header=False, mode='a'):
+    #         offset += 30
+    # except KeyboardInterrupt:
+    #     print("end!")
