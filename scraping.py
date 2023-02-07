@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 session = HTMLSession()
 
 def get_hotels(offset:int):
-    url = "https://www.tripadvisor.com.vn/Hotels-g293921-Vietnam-Hotels.html"
+    url = "https://www.tripadvisor.com.vn/Restaurants-g293921-Vietnam.html"
 
     schema_json = f"offset={offset}"
     #
