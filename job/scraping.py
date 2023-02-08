@@ -1,10 +1,16 @@
-import json
-import re
-import sys
-from langdetect import detect
+import re, sys, json
+from time import sleep
 import pandas as pd
 from bs4 import BeautifulSoup
 from requests_html import HTMLSession
+import findspark
+findspark.init()
+import pyspark 
+import pyspark.pandas as ps
+from pyspark.sql import SparkSession
+from IPython.display import display, clear_output
+from pyspark.sql import functions as F
+from settings import KAFKA_SERVERS, TOPIC_NAME
 
 session = HTMLSession()
 
@@ -45,10 +51,13 @@ def get_reviews(location_id: int):
             'createdDate',
             'userProfile.userId', 'userProfile.username'
         ]]
-        df.columns = ['id', 'text', 'createdDate', 'userId', 'username']
+        df.columns = ['review_id', 'text', 'createdDate', 'userId', 'username']
         df['text'] = df['text'].apply(lambda x: x.splitlines())
-        df = df.explode('text')
-        return df.dropna().drop_duplicates()
+        df = df.explode('text').dropna().drop_duplicates()
+        df = df[df['text'].str.match(r'[a-zA-Z1-9]') == True].reset_index()
+        df['count'] = df.groupby('review_id').cumcount() + 1
+        df['review_id'] = df['count'].astype(str) + df["review_id"].astype(str)
+        return df
     except KeyError:
         print(f'id {location_id} error')
 
@@ -60,18 +69,35 @@ def get_restaurants(city_id: int, offset: int):
     items = [item for item in soup.select('div[data-test*=list_item]') if item.attrs["data-test"] != "SL_list_item"]
     names = [re.sub('\d+\.\s+', '', item.select("a")[1].text, 1) for item in items]
     ids = [re.search('-d(\d+)', item.select("a")[1].attrs["href"])[1] for item in items]
-    df = pd.DataFrame({"id": ids, "Name": names})
+    df = pd.DataFrame({"restaurant_id": ids, "Name": names})
+    df.insert(0,'city_id',city_id)
     return df
 
 
 def run(city_id: int, offset: int, header: bool = True, mode: str = 'w'):
     restaurants = get_restaurants(city_id, offset)
     restaurants.to_csv(f'data/{city_id}_restaurants.csv', encoding='utf-8', index=False, mode=mode, header=header)
-    for id in restaurants['id']:
+    for id in restaurants['restaurant_id']:
         df = get_reviews(id)
+        df.insert(0,'restaurant_id',id)
         
         if df is not None:
-            df.to_csv(f'data/{city_id}_restaurant_reviews.csv', encoding='utf-8', index=False, mode=mode, header=header)
+            df[['review_id', 'createdDate', 'userId', 'username', 'text']]\
+                .to_csv(
+                    f'data/{city_id}_restaurant_reviews.csv', encoding='utf-8', 
+                    index=False, mode=mode, header=header
+                )
+            sdf = ps.from_pandas(df).to_spark()
+            
+            query = sdf.select(
+                    F.col('review_id').cast("string").alias("key"),
+                    F.col('text').cast("string").alias("value")
+                )
+            
+            query.write.format("kafka") \
+                .option("kafka.bootstrap.servers",KAFKA_SERVERS)\
+                .option("topic", TOPIC_NAME).save()
+            print(f'successfully save data of {id}')
 
     if len(restaurants) < 30:
         return False
@@ -81,12 +107,13 @@ def run(city_id: int, offset: int, header: bool = True, mode: str = 'w'):
 
 if __name__ == "__main__":
     city_id = sys.argv[1]
-    run(city_id, 0)
-
+    running = run(city_id, 0)
     offset = 30
     try:
-        while run(city_id, offset, header=False, mode='a'):
+        while running:
+            running = run(city_id, offset, header=False, mode='a')
             offset += 30
+            sleep(5)
     except KeyboardInterrupt:
         print("end!")
 

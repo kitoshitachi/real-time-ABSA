@@ -36,3 +36,8 @@ INPUT_VOCAB_SIZE = 4728
 with open('embedding_matrix.pkl', 'rb') as fp:
     EMBEDDING_MATRIX = pickle.load(fp)
 CHECKPOINT_PATH ='D:\\19521204\python\\realtime_ABSA\checkpoint_dir\checkpoint'
+
+KAFKA_SERVERS = 'localhost:9092,localhost:9093,localhost:9094'
+TOPIC_NAME = 'ABSA'
+NUM_PARTITIONS = 3
+REPLICATION_FACTOR = 2

@@ -5,7 +5,10 @@ import pandas as pd
 from ftfy import fix_text
 from pyvi.ViTokenizer import ViTokenizer
 from keras.utils import pad_sequences
-from settings import CATERGORIES, CHECKPOINT_PATH, INPUT_TOKERNIZER, MAX_LEN
+from my_model import BiLSTM_CNN
+from settings import CATERGORIES, CHECKPOINT_PATH, INPUT_TOKERNIZER, LABELS, MAX_LEN
+import tensorflow as tf
+import tensorflow_addons as tfa
 
 def clean_doc(text, word_segment=False, lower_case=True):
     text = re.sub('\\s+',' ',text) # remove multiple white spaces
@@ -70,10 +73,8 @@ def dataloader(file_names):
     #clean document
     data['text'] = data['text'].apply(clean_doc)
 
-    #build vocab
-    tokenizer = INPUT_TOKERNIZER
     #text to vector
-    data['vector_text'] = tokenizer.texts_to_sequences(data['text'])
+    data['vector_text'] = INPUT_TOKERNIZER.texts_to_sequences(data['text'])
 
     #padding
     data['vector_text'] = pad_sequences(data['vector_text'], maxlen=MAX_LEN,padding="post").tolist()
