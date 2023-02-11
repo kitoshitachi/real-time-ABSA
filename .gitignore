@@ -1,4 +1,5 @@
 checkpoints_dirs
+checkpoint_streaming
 Sentence-level-Restaurant
 word2vec_vi_words_100dims.txt
 data

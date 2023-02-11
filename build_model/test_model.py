@@ -1,4 +1,4 @@
-from settings import CATERGORIES, CHECKPOINT_PATH, MAX_LEN
+from settings import CATERGORIES, CHECKPOINT_PATH, MAX_LEN, LABELS
 from my_model import BiLSTM_CNN
 from utils import dataloader
 import tensorflow as tf
@@ -62,3 +62,28 @@ for category in CATERGORIES:
 print(" ============ độ chính xác dự đoán cảm xúc trên mỗi khía cạnh============ ")
 for category in CATERGORIES:
   print(f"{category}: {round(result[category]['true_label']*100/result[category]['all_label'],2)}%")
+
+
+def foo(x):
+  if x != 0:
+    return '{' f'{category}, {LABELS[x]}' +'}'
+  else:
+    return np.nan
+
+
+
+for category in CATERGORIES:
+  predict[category] = predict[category].apply(foo)
+
+
+
+predict['predict'] = predict.apply(lambda x: '{' + ", ".join(x.dropna().astype(str)) + '}',axis=1)
+
+# test_df.merge(predict[['predict']],how='left')
+
+test_df.merge(predict[['predict']],how='left', left_index=True, right_index=True) \
+  [['text','label','predict']]\
+  .to_excel('result.xlsx')
+  # [['text','true_label','predict']])\
+
+# predict
